@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 
 from engine.models import Asset, AssetClass, Band, Order, OrderAction, ZoneStatus
@@ -93,24 +92,29 @@ def compute_rebalancing(
         share = (priority / total_priority) if total_priority > 0 else (1.0 / len(top_candidates))
         budget = cash_injection * share
         budget = min(budget, remaining_cash)
-        qty = math.floor(budget / a.current_price)
+        qty = round(budget / a.current_price, 2)
         if qty > 0:
             orders.append(Order(ticker=a.ticker, action=OrderAction.BUY, quantity=qty, price=a.current_price))
             remaining_cash -= qty * a.current_price
 
-    # --- Sweep: use leftover cash to buy more of the top candidates ---
-    for a, _ in top_candidates:
-        if remaining_cash < a.current_price:
-            continue
-        extra_qty = math.floor(remaining_cash / a.current_price)
-        if extra_qty <= 0:
-            continue
-        existing = next((o for o in orders if o.ticker == a.ticker), None)
-        if existing:
-            existing.quantity += extra_qty
-        else:
-            orders.append(Order(ticker=a.ticker, action=OrderAction.BUY, quantity=extra_qty, price=a.current_price))
-        remaining_cash -= extra_qty * a.current_price
+    # --- Sweep: allocate remaining cash to top candidate ---
+    if remaining_cash > 0.01 and top_candidates:
+        best_asset = top_candidates[0][0]
+        extra_qty = round(remaining_cash / best_asset.current_price, 2)
+        if extra_qty > 0:
+            existing = next((o for o in orders if o.ticker == best_asset.ticker), None)
+            if existing:
+                existing.quantity = round(existing.quantity + extra_qty, 2)
+            else:
+                orders.append(
+                    Order(
+                        ticker=best_asset.ticker,
+                        action=OrderAction.BUY,
+                        quantity=extra_qty,
+                        price=best_asset.current_price,
+                    )
+                )
+            remaining_cash -= extra_qty * best_asset.current_price
 
     # --- Sell orders (last resort) ---
     sell_orders = _compute_sells(assets, v_projected, zones)
@@ -140,7 +144,7 @@ def _compute_sells(
         if excess <= 0:
             continue
 
-        qty = math.floor(excess / a.current_price)
+        qty = round(excess / a.current_price, 2)
         if qty > 0:
             orders.append(Order(ticker=a.ticker, action=OrderAction.SELL, quantity=qty, price=a.current_price))
 

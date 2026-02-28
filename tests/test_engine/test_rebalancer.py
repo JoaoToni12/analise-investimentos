@@ -64,11 +64,12 @@ class TestMaxOrders:
 
 
 class TestBuyOrders:
-    def test_floor_division(self):
+    def test_fractional_shares(self):
         assets, zones = _build([("A", 1, 100, 50, "ACAO"), ("B", 1, 100, 50, "FII")], absolute=30.0)
         orders, _ = compute_rebalancing(assets, 150.0, zones, max_orders=5)
         for o in orders:
-            assert o.quantity == int(o.quantity)
+            assert o.quantity > 0
+            assert round(o.quantity, 2) == o.quantity  # max 2 decimal places
 
     def test_prioritizes_most_underweight(self):
         assets, zones = _build(

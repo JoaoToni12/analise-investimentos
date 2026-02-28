@@ -72,7 +72,7 @@ class Band:
 class Order:
     ticker: str
     action: OrderAction
-    quantity: int
+    quantity: float
     price: float
 
     @property

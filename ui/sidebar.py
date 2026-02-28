@@ -60,22 +60,24 @@ def render_sidebar() -> dict:
     )
 
     st.sidebar.subheader("🎯 Bandas de Tolerância")
-    relative_band = st.sidebar.slider(
-        "Banda relativa",
-        min_value=0.0,
-        max_value=0.50,
-        value=DEFAULT_RELATIVE_BAND,
-        step=0.05,
-        format="%.0%%",
+    relative_band_pct = st.sidebar.slider(
+        "Banda relativa (%)",
+        min_value=0,
+        max_value=50,
+        value=int(DEFAULT_RELATIVE_BAND * 100),
+        step=5,
+        format="%d%%",
         help="Desvio proporcional ao peso alvo (ex: 20% de 5% = ±1pp)",
     )
+    relative_band = relative_band_pct / 100.0
+
     absolute_band = st.sidebar.slider(
         "Banda absoluta (pp)",
         min_value=0.0,
         max_value=5.0,
         value=DEFAULT_ABSOLUTE_BAND,
         step=0.25,
-        format="%.2f",
+        format="%.2f pp",
         help="Desvio fixo em pontos percentuais (ex: 1.5 = ±1.5pp)",
     )
 

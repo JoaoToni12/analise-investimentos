@@ -19,7 +19,7 @@ from engine.models import Asset, AssetClass
 from engine.portfolio import compute_weights, enrich_weights
 from engine.rebalancer import compute_rebalancing
 from ingestion.brapi_client import get_batch_quotes
-from ingestion.portfolio_loader import load_portfolio
+from ingestion.portfolio_loader import load_portfolio, load_portfolio_meta
 from ingestion.tesouro_client import get_tesouro_prices
 from ingestion.yfinance_client import get_yfinance_quotes
 from ui.action_table import render_action_table
@@ -52,6 +52,7 @@ with st.expander("🗂️ Gestão da Carteira", expanded=False):
     render_portfolio_manager()
 
 positions = load_portfolio()
+portfolio_meta = load_portfolio_meta()
 
 if not positions:
     st.warning("Nenhuma posição cadastrada. Adicione ativos na seção 'Gestão da Carteira' acima.")
@@ -189,7 +190,7 @@ if prices_df is not None and not prices_df.empty and len(prices_df.columns) >= 2
             zones = classify_all(assets, params["relative_band"], params["absolute_band"])
 
 # --- Dashboard KPIs ---
-render_dashboard(assets, zones)
+render_dashboard(assets, zones, portfolio_meta)
 
 # --- Capital allocation ---
 to_reserve, to_invest = render_capital_allocation(params["cash_injection"], reserve_deficit)

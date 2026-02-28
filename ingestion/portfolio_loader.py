@@ -6,7 +6,7 @@ from typing import Any
 
 import pandas as pd
 
-from config import PORTFOLIO_PATH
+from config import PORTFOLIO_META_PATH, PORTFOLIO_PATH
 
 REQUIRED_FIELDS = {"ticker", "asset_class", "quantity", "avg_price", "target_weight_pct"}
 OPTIONAL_FIELDS = {"current_price", "is_reserve", "currency", "usd_avg_price", "usd_current_price", "rentabilidade"}
@@ -81,6 +81,24 @@ def _resolve_column(df_columns: list[str], field: str) -> str | None:
         if alias.lower() in lower_cols:
             return lower_cols[alias.lower()]
     return None
+
+
+def load_portfolio_meta(path: Path | None = None) -> dict[str, Any]:
+    """Load portfolio-level metadata (dividends, invested amount, etc.)."""
+    path = path or PORTFOLIO_META_PATH
+    if not path.exists():
+        return {}
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    return data if isinstance(data, dict) else {}
+
+
+def save_portfolio_meta(meta: dict[str, Any], path: Path | None = None) -> None:
+    """Persist portfolio metadata."""
+    path = path or PORTFOLIO_META_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
 
 
 def load_portfolio(path: Path | None = None) -> list[dict[str, Any]]:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import streamlit as st
 
 from engine.models import Asset, AssetClass, Band, ZoneStatus
@@ -20,32 +22,46 @@ CLASS_LABELS = {
 def render_dashboard(
     assets: list[Asset],
     zones: dict[str, tuple[ZoneStatus, Band]],
+    meta: dict[str, Any] | None = None,
 ) -> None:
-    """Render top-level KPIs and class-level status."""
+    """Render top-level KPIs, dividends and class-level status."""
+    meta = meta or {}
     total_value = compute_portfolio_value(assets)
     total_cost = sum(a.cost_basis for a in assets)
-    total_pnl = total_value - total_cost
+    dividends = float(meta.get("dividendos_recebidos", 0))
+    total_pnl = (total_value - total_cost) + dividends
     pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
 
+    # --- Row 1: Main KPIs ---
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Patrimônio Total", f"R$ {total_value:,.2f}")
+        st.metric("Patrimônio Total", f"R$ {total_value:,.2f}", delta=f"{pnl_pct:+.1f}%")
     with col2:
-        st.metric("Lucro / Prejuízo", f"R$ {total_pnl:,.2f}", delta=f"{pnl_pct:+.1f}%")
+        cap_gain = total_value - total_cost
+        st.metric("Ganho de Capital", f"R$ {cap_gain:,.2f}")
     with col3:
-        st.metric("Ativos", f"{len(assets)} posições")
+        st.metric("Proventos Recebidos", f"R$ {dividends:,.2f}")
     with col4:
-        n_buy = sum(1 for _, (s, _) in zones.items() if s == ZoneStatus.BUY)
-        n_sell = sum(1 for _, (s, _) in zones.items() if s == ZoneStatus.SELL)
-        if n_sell > 0:
-            st.metric("Alertas", f"{n_sell} SELL / {n_buy} BUY", delta="Atenção", delta_color="inverse")
-        elif n_buy > 0:
-            st.metric("Alertas", f"{n_buy} BUY", delta="Oportunidade")
-        else:
-            st.metric("Alertas", "Equilibrado", delta="OK")
+        st.metric("Lucro Total", f"R$ {total_pnl:,.2f}")
+
+    # --- Row 2: Alerts ---
+    n_buy = sum(1 for _, (s, _) in zones.items() if s == ZoneStatus.BUY)
+    n_sell = sum(1 for _, (s, _) in zones.items() if s == ZoneStatus.SELL)
+    n_hold = len(zones) - n_buy - n_sell
+
+    alert_cols = st.columns(4)
+    with alert_cols[0]:
+        st.metric("Ativos", f"{len(assets)} posições")
+    with alert_cols[1]:
+        st.metric("BUY", str(n_buy), delta="comprar" if n_buy > 0 else None)
+    with alert_cols[2]:
+        st.metric("HOLD", str(n_hold))
+    with alert_cols[3]:
+        st.metric("SELL", str(n_sell), delta="vender" if n_sell > 0 else None, delta_color="inverse")
 
     st.divider()
 
+    # --- Class-level allocation table ---
     col_classes, col_gaps = st.columns([3, 2])
 
     with col_classes:

@@ -13,6 +13,7 @@ BRAPI_TOKEN: str = os.getenv("BRAPI_TOKEN", "")
 BRAPI_BASE_URL: str = "https://brapi.dev/api"
 
 PORTFOLIO_PATH: Path = BASE_DIR / "data" / "portfolio.json"
+PORTFOLIO_META_PATH: Path = BASE_DIR / "data" / "portfolio_meta.json"
 
 DEFAULT_LOOKBACK: str = "2y"
 TRADING_DAYS_PER_YEAR: int = 252

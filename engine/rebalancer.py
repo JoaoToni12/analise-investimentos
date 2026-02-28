@@ -50,18 +50,24 @@ def compute_rebalancing(
             class_deficits[cls] = gap
 
     total_deficit = sum(class_deficits.values())
+    total_target = sum(class_targets.values())
     class_cash: dict[AssetClass, float] = {}
-    if total_deficit > 0:
+
+    if total_deficit > 1.0:
+        # Significant imbalance: allocate proportionally to class deficit
         for cls, deficit in class_deficits.items():
             class_cash[cls] = cash_injection * (deficit / total_deficit)
-    else:
-        for cls in class_targets:
-            class_cash[cls] = cash_injection * (class_targets[cls] / 100.0) if sum(class_targets.values()) > 0 else 0
+    elif total_target > 0:
+        # Near equilibrium: allocate proportionally to target weight (DCA mode)
+        for cls, target in class_targets.items():
+            class_cash[cls] = cash_injection * (target / total_target)
 
-    # --- Layer 2: Within-class allocation ---
+    # --- Layer 2: Within-class allocation (2 passes: allocate + spillover) ---
     orders: list[Order] = []
     remaining_cash = cash_injection
 
+    # Pass 1: Each class gets its allocated budget
+    class_spent: dict[AssetClass, float] = {}
     for cls in sorted(class_cash, key=lambda c: -class_cash.get(c, 0)):
         budget = class_cash.get(cls, 0)
         if budget <= 0:
@@ -72,9 +78,35 @@ def compute_rebalancing(
             continue
 
         buy_list = _compute_class_buys(cls_assets, budget, v_projected, zones)
+        spent = 0.0
         for order in buy_list:
             orders.append(order)
             remaining_cash -= order.amount
+            spent += order.amount
+        class_spent[cls] = spent
+
+    # Pass 2: Spillover -- buy affordable assets sorted by target weight (most wanted first)
+    if remaining_cash > 1.0:
+        affordable = [a for a in assets if 0 < a.current_price <= remaining_cash]
+        affordable.sort(key=lambda a: -a.target_weight)
+
+        ordered_tickers = {o.ticker for o in orders}
+        for a in affordable:
+            if remaining_cash < a.current_price:
+                continue
+            target_budget = remaining_cash * (a.target_weight / 100.0) if a.target_weight > 0 else 0
+            spend = max(target_budget, a.current_price)
+            spend = min(spend, remaining_cash)
+            qty = math.floor(spend / a.current_price)
+            if qty <= 0:
+                continue
+            if a.ticker in ordered_tickers:
+                existing = next(o for o in orders if o.ticker == a.ticker)
+                existing.quantity += qty
+            else:
+                orders.append(Order(ticker=a.ticker, action=OrderAction.BUY, quantity=qty, price=a.current_price))
+                ordered_tickers.add(a.ticker)
+            remaining_cash -= qty * a.current_price
 
     # --- Phase 3: Sell orders (last resort) ---
     sell_orders = _compute_sells(assets, v_projected, zones)
@@ -91,26 +123,28 @@ def _compute_class_buys(
     v_projected: float,
     zones: dict[str, tuple[ZoneStatus, Band]],
 ) -> list[Order]:
-    """Allocate budget within a single asset class to the most underweight assets."""
-    deltas: list[tuple[Asset, float]] = []
+    """Allocate budget within a single asset class to the most underweight assets.
+
+    All assets with positive delta get buy orders, not just BUY-zone ones.
+    BUY-zone assets get 2x priority weight so they're filled first.
+    """
+    deltas: list[tuple[Asset, float, float]] = []
     for a in cls_assets:
         target_val = (a.target_weight / 100.0) * v_projected
         delta = target_val - a.current_value
+        if delta <= 0 or a.current_price <= 0:
+            continue
         status = zones.get(a.ticker, (ZoneStatus.HOLD, None))[0]
-        if delta > 0 and status != ZoneStatus.HOLD:
-            deltas.append((a, delta))
-        elif status == ZoneStatus.BUY:
-            deltas.append((a, max(delta, 0.01)))
+        priority = delta * (2.0 if status == ZoneStatus.BUY else 1.0)
+        deltas.append((a, delta, priority))
 
-    deltas.sort(key=lambda x: -x[1])
+    deltas.sort(key=lambda x: -x[2])
 
     orders: list[Order] = []
     cash_left = budget
-    for a, delta in deltas:
+    for a, delta, _priority in deltas:
         if cash_left <= 0:
             break
-        if a.current_price <= 0:
-            continue
         spend = min(delta, cash_left)
         qty = math.floor(spend / a.current_price)
         if qty > 0:

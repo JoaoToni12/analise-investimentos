@@ -13,76 +13,62 @@ from config import (
 
 
 def render_sidebar() -> dict:
-    """Render the sidebar controls and return the user's parameter choices."""
+    """Render sidebar with primary controls visible and advanced settings collapsed."""
     st.sidebar.header("Parâmetros")
 
-    st.sidebar.subheader("💰 Capital para Investir")
+    st.sidebar.subheader("💰 APORTE")
     cash_injection = st.sidebar.number_input(
-        "Aporte mensal (R$)",
-        min_value=0.0,
-        value=1000.0,
-        step=100.0,
-        format="%.2f",
+        "Valor mensal (R$)", min_value=0.0, value=1000.0, step=100.0, format="%.2f"
     )
 
-    st.sidebar.subheader("🛡️ Reserva de Emergência")
+    st.sidebar.subheader("🛡️ RESERVA")
     monthly_expenses = st.sidebar.number_input(
-        "Despesas mensais (R$)",
-        min_value=0.0,
-        value=DEFAULT_MONTHLY_EXPENSES,
-        step=500.0,
-        format="%.2f",
+        "Despesas mensais (R$)", min_value=0.0, value=DEFAULT_MONTHLY_EXPENSES, step=500.0, format="%.2f"
     )
     emergency_months = st.sidebar.number_input(
-        "Meses de cobertura",
-        min_value=1,
-        max_value=24,
-        value=DEFAULT_EMERGENCY_MONTHS,
-        step=1,
+        "Meses de cobertura", min_value=1, max_value=24, value=DEFAULT_EMERGENCY_MONTHS, step=1
     )
 
-    st.sidebar.subheader("📊 Markowitz")
-    risk_free_rate = st.sidebar.number_input(
-        "Taxa livre de risco (SELIC)",
-        min_value=0.0,
-        max_value=1.0,
-        value=DEFAULT_RISK_FREE_RATE,
-        step=0.0025,
-        format="%.4f",
-    )
-    blend_factor = st.sidebar.slider(
-        "Fator de blend Markowitz",
-        min_value=0.0,
-        max_value=1.0,
-        value=DEFAULT_BLEND_FACTOR,
-        step=0.05,
-        help="0 = manter pesos atuais | 1 = 100% Markowitz",
-    )
-
-    st.sidebar.subheader("🎯 Bandas de Tolerância")
-    relative_band_pct = st.sidebar.slider(
-        "Banda relativa (%)",
-        min_value=0,
-        max_value=50,
-        value=int(DEFAULT_RELATIVE_BAND * 100),
-        step=5,
-        format="%d%%",
-        help="Desvio proporcional ao peso alvo (ex: 20% de 5% = ±1pp)",
-    )
-    relative_band = relative_band_pct / 100.0
-
-    absolute_band = st.sidebar.slider(
-        "Banda absoluta (pp)",
-        min_value=0.0,
-        max_value=5.0,
-        value=DEFAULT_ABSOLUTE_BAND,
-        step=0.25,
-        format="%.2f pp",
-        help="Desvio fixo em pontos percentuais (ex: 1.5 = ±1.5pp)",
-    )
+    with st.sidebar.expander("⚙️ Configurações Avançadas"):
+        st.caption("MARKOWITZ")
+        risk_free_rate = st.number_input(
+            "Taxa livre de risco (SELIC)",
+            min_value=0.0,
+            max_value=1.0,
+            value=DEFAULT_RISK_FREE_RATE,
+            step=0.0025,
+            format="%.4f",
+        )
+        blend_factor = st.slider(
+            "Blend Markowitz",
+            min_value=0.0,
+            max_value=1.0,
+            value=DEFAULT_BLEND_FACTOR,
+            step=0.05,
+            help="0 = pesos manuais | 1 = 100% otimização",
+        )
+        st.caption("BANDAS DE TOLERÂNCIA")
+        relative_band_pct = st.slider(
+            "Banda relativa (%)",
+            min_value=0,
+            max_value=50,
+            value=int(DEFAULT_RELATIVE_BAND * 100),
+            step=5,
+            format="%d%%",
+            help="Desvio proporcional ao peso alvo",
+        )
+        absolute_band = st.slider(
+            "Banda absoluta (pp)",
+            min_value=0.0,
+            max_value=5.0,
+            value=DEFAULT_ABSOLUTE_BAND,
+            step=0.25,
+            format="%.2f pp",
+            help="Desvio fixo em pontos percentuais",
+        )
 
     st.sidebar.divider()
-    refresh = st.sidebar.button("🔄 Atualizar Cotações", use_container_width=True)
+    refresh = st.sidebar.button("🔄 Atualizar Cotações", use_container_width=True, type="primary")
 
     return {
         "cash_injection": cash_injection,
@@ -90,7 +76,7 @@ def render_sidebar() -> dict:
         "emergency_months": emergency_months,
         "risk_free_rate": risk_free_rate,
         "blend_factor": blend_factor,
-        "relative_band": relative_band,
+        "relative_band": relative_band_pct / 100.0,
         "absolute_band": absolute_band,
         "refresh": refresh,
     }

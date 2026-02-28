@@ -20,6 +20,15 @@ def test_import_charts():
     assert hasattr(mod, "render_allocation_chart")
     assert hasattr(mod, "render_deviation_chart")
     assert hasattr(mod, "render_correlation_heatmap")
+    assert hasattr(mod, "render_maturity_calendar")
+
+
+def test_import_theme():
+    mod = importlib.import_module("ui.theme")
+    assert hasattr(mod, "inject_css")
+    assert hasattr(mod, "kpi_card")
+    assert hasattr(mod, "signal_strip")
+    assert hasattr(mod, "PLOTLY_LAYOUT")
 
 
 def test_import_action_table():

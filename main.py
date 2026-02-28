@@ -176,12 +176,12 @@ if prices_df is not None and not prices_df.empty and len(prices_df.columns) >= 2
                     a.target_weight = suggested[a.ticker]
             zones = classify_all(assets, params["relative_band"], params["absolute_band"])
 
-# --- Dashboard ---
-render_dashboard(assets, zones, portfolio_meta)
-
-# --- Capital allocation ---
+# --- Capital allocation + Rebalancing (compute before rendering) ---
 to_reserve, to_invest = render_capital_allocation(params["cash_injection"], reserve_deficit)
 orders, residual_cash = compute_rebalancing(assets, to_invest, zones)
+
+# --- Dashboard (uses real orders for signal strip) ---
+render_dashboard(assets, zones, portfolio_meta, orders)
 
 # --- Tabs ---
 tab_orders, tab_reserve, tab_alloc, tab_frontier, tab_rf, tab_corr = st.tabs(

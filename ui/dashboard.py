@@ -5,7 +5,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from engine.models import Asset, AssetClass, Band, ZoneStatus
+from engine.models import Asset, AssetClass, Band, Order, OrderAction, ZoneStatus
 from engine.portfolio import compute_class_weights, compute_gaps, compute_portfolio_value
 from engine.rebalancer import compute_class_targets
 from ui.theme import CLASS_LABELS, kpi_card, signal_strip
@@ -15,9 +15,11 @@ def render_dashboard(
     assets: list[Asset],
     zones: dict[str, tuple[ZoneStatus, Band]],
     meta: dict[str, Any] | None = None,
+    orders: list[Order] | None = None,
 ) -> None:
     """Render professional dashboard with KPI cards, signals, and class table."""
     meta = meta or {}
+    orders = orders or []
     total_value = compute_portfolio_value(assets)
     total_cost = sum(a.cost_basis for a in assets)
     dividends = float(meta.get("dividendos_recebidos", 0))
@@ -37,9 +39,10 @@ def render_dashboard(
 
     st.write("")
 
-    n_buy = sum(1 for _, (s, _) in zones.items() if s == ZoneStatus.BUY)
-    n_sell = sum(1 for _, (s, _) in zones.items() if s == ZoneStatus.SELL)
-    n_hold = len(zones) - n_buy - n_sell
+    # Signal strip based on ACTUAL orders, not just zone status
+    n_buy = sum(1 for o in orders if o.action == OrderAction.BUY)
+    n_sell = sum(1 for o in orders if o.action == OrderAction.SELL)
+    n_hold = len(assets) - n_buy - n_sell
     signal_strip(n_buy, n_hold, n_sell)
 
     col_classes, col_gaps = st.columns([3, 2])

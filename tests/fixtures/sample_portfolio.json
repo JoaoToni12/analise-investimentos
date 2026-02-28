@@ -1,0 +1,10 @@
+[
+  {"ticker": "PETR4", "asset_class": "ACAO", "quantity": 100, "avg_price": 28.50, "target_weight_pct": 15.0},
+  {"ticker": "VALE3", "asset_class": "ACAO", "quantity": 50, "avg_price": 68.00, "target_weight_pct": 15.0},
+  {"ticker": "ITUB4", "asset_class": "ACAO", "quantity": 200, "avg_price": 25.00, "target_weight_pct": 12.0},
+  {"ticker": "WEGE3", "asset_class": "ACAO", "quantity": 80, "avg_price": 35.00, "target_weight_pct": 10.0},
+  {"ticker": "BBAS3", "asset_class": "ACAO", "quantity": 120, "avg_price": 42.00, "target_weight_pct": 8.0},
+  {"ticker": "HGLG11", "asset_class": "FII", "quantity": 30, "avg_price": 160.00, "target_weight_pct": 15.0},
+  {"ticker": "XPML11", "asset_class": "FII", "quantity": 25, "avg_price": 95.00, "target_weight_pct": 10.0},
+  {"ticker": "BTC", "asset_class": "CRYPTO", "quantity": 0.01, "avg_price": 350000.00, "target_weight_pct": 15.0}
+]

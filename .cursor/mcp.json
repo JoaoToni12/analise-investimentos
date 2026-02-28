@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "investidor10": {
+      "command": "npx",
+      "args": ["-y", "@newerton/mcp-investidor10"]
+    }
+  }
+}

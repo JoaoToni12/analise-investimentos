@@ -23,7 +23,6 @@ PLOTLY_LAYOUT = {
     "plot_bgcolor": "rgba(0,0,0,0)",
     "font": {"family": "Inter, system-ui, sans-serif", "color": "#FAFAFA", "size": 12},
     "colorway": ["#0066FF", "#22C55E", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4", "#EC4899"],
-    "margin": {"t": 40, "b": 40, "l": 40, "r": 20},
 }
 
 CLASS_COLORS = {
@@ -73,7 +72,6 @@ CSS = """
     section[data-testid="stSidebar"] { background-color: #0A0D12; border-right: 1px solid #2D3139; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
 </style>
 """
 

@@ -20,10 +20,12 @@ from engine.portfolio import compute_weights, enrich_weights
 from engine.rebalancer import compute_rebalancing
 from ingestion.brapi_client import get_batch_quotes
 from ingestion.portfolio_loader import load_portfolio
-from ingestion.yfinance_client import get_historical_prices
+from ingestion.tesouro_client import get_tesouro_prices
+from ingestion.yfinance_client import get_yfinance_quotes
 from ui.action_table import render_action_table
 from ui.charts import (
     render_allocation_chart,
+    render_class_allocation_pie,
     render_correlation_heatmap,
     render_deviation_chart,
     render_efficient_frontier,
@@ -34,6 +36,7 @@ from ui.reserves import compute_reserve_value, render_capital_allocation, render
 from ui.sidebar import render_sidebar
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 st.set_page_config(
     page_title="Rebalanceamento de Carteira",
@@ -43,12 +46,10 @@ st.set_page_config(
 
 st.title("📈 Sistema de Rebalanceamento de Carteira")
 
-# --- Sidebar ---
 params = render_sidebar()
 
-# --- Portfolio Management (expander) ---
 with st.expander("🗂️ Gestão da Carteira", expanded=False):
-    positions = render_portfolio_manager()
+    render_portfolio_manager()
 
 positions = load_portfolio()
 
@@ -56,41 +57,70 @@ if not positions:
     st.warning("Nenhuma posição cadastrada. Adicione ativos na seção 'Gestão da Carteira' acima.")
     st.stop()
 
-# --- Separate brapi-eligible tickers from manual-priced ones ---
-brapi_tickers = []
+# --- Classify tickers by pricing source ---
+brapi_tickers: list[str] = []
+yf_crypto_tickers: list[str] = []
+tesouro_tickers: list[str] = []
+manual_tickers: list[str] = []
+
 for p in positions:
-    ticker = p["ticker"]
-    if not any(ticker.startswith(prefix) for prefix in NON_BRAPI_PREFIXES):
-        brapi_tickers.append(ticker)
+    t = p["ticker"]
+    cls = p.get("asset_class", "ACAO")
+    if t.startswith("TESOURO_"):
+        tesouro_tickers.append(t)
+    elif cls == "CRYPTO":
+        yf_crypto_tickers.append(t)
+    elif any(t.startswith(prefix) for prefix in NON_BRAPI_PREFIXES):
+        manual_tickers.append(t)
+    else:
+        brapi_tickers.append(t)
 
 all_tickers = [p["ticker"] for p in positions]
 asset_classes = [p.get("asset_class", "ACAO") for p in positions]
 
 
-@st.cache_data(ttl=300, show_spinner="Buscando cotações...")
-def _fetch_quotes(ticker_list: tuple[str, ...]) -> dict[str, float]:
+# --- Pricing functions ---
+@st.cache_data(ttl=300, show_spinner="Buscando cotações B3...")
+def _fetch_brapi(ticker_list: tuple[str, ...]) -> dict[str, float]:
     return get_batch_quotes(list(ticker_list))
+
+
+@st.cache_data(ttl=600, show_spinner="Buscando preços crypto...")
+def _fetch_yf_quotes(ticker_list: tuple[str, ...], classes: tuple[str, ...]) -> dict[str, float]:
+    return get_yfinance_quotes(list(ticker_list), list(classes))
+
+
+@st.cache_data(ttl=3600, show_spinner="Buscando preços Tesouro Direto...")
+def _fetch_tesouro() -> dict[str, float]:
+    return get_tesouro_prices()
 
 
 @st.cache_data(ttl=3600, show_spinner="Baixando histórico de preços...")
 def _fetch_historical(ticker_list: tuple[str, ...], classes: tuple[str, ...], period: str) -> dict:
-    df = get_historical_prices(list(ticker_list), list(classes), period)
+    from ingestion.yfinance_client import get_historical_prices as _ghp
+
+    df = _ghp(list(ticker_list), list(classes), period)
     return {"df": df}
 
 
+# --- Fetch all prices ---
 if params["refresh"] or "quotes" not in st.session_state:
+    all_quotes: dict[str, float] = {}
     if brapi_tickers:
-        st.session_state["quotes"] = _fetch_quotes(tuple(brapi_tickers))
-    else:
-        st.session_state["quotes"] = {}
+        all_quotes.update(_fetch_brapi(tuple(brapi_tickers)))
+    if yf_crypto_tickers:
+        crypto_classes = tuple(p.get("asset_class", "CRYPTO") for p in positions if p["ticker"] in yf_crypto_tickers)
+        all_quotes.update(_fetch_yf_quotes(tuple(yf_crypto_tickers), crypto_classes))
+    if tesouro_tickers:
+        all_quotes.update(_fetch_tesouro())
+    st.session_state["quotes"] = all_quotes
 
 quotes = st.session_state.get("quotes", {})
 
-# --- Build Asset objects with fallback pricing ---
+# --- Build Asset objects ---
 assets: list[Asset] = []
 for p in positions:
     ticker = p["ticker"]
-    # Priority: brapi quote > stored current_price > avg_price
     price = quotes.get(ticker, 0.0)
     if price <= 0:
         price = float(p.get("current_price", 0.0))
@@ -109,18 +139,18 @@ for p in positions:
     )
 
 assets = enrich_weights(assets)
-
-# --- Grey Zones ---
 zones = classify_all(assets, params["relative_band"], params["absolute_band"])
 
-# --- Emergency Reserve Calculations ---
+# --- Emergency Reserve ---
 target_reserve = params["monthly_expenses"] * params["emergency_months"]
 current_reserve = compute_reserve_value(assets, positions)
 reserve_deficit = max(target_reserve - current_reserve, 0)
 
-# --- Markowitz (only for tickers with historical data) ---
-markowitz_tickers = [t for t, c in zip(all_tickers, asset_classes) if c in ("ACAO", "FII", "ETF", "BDR")]
-markowitz_classes = [c for c in asset_classes if c in ("ACAO", "FII", "ETF", "BDR")]
+# --- Markowitz (ações + FIIs + crypto with history) ---
+MARKOWITZ_CLASSES = {"ACAO", "FII", "ETF", "BDR", "CRYPTO"}
+markowitz_pairs = [(t, c) for t, c in zip(all_tickers, asset_classes) if c in MARKOWITZ_CLASSES]
+markowitz_tickers = [t for t, _ in markowitz_pairs]
+markowitz_classes = [c for _, c in markowitz_pairs]
 
 hist_data = {}
 if markowitz_tickers:
@@ -134,7 +164,7 @@ corr_matrix = np.array([])
 
 if prices_df is not None and not prices_df.empty and len(prices_df.columns) >= 2:
     returns_df = compute_log_returns(prices_df)
-    if not returns_df.empty:
+    if not returns_df.empty and len(returns_df.columns) >= 2:
         mu = compute_expected_returns(returns_df)
         sigma = compute_covariance_matrix(returns_df)
 
@@ -158,41 +188,31 @@ if prices_df is not None and not prices_df.empty and len(prices_df.columns) >= 2
                     a.target_weight = suggested[a.ticker]
             zones = classify_all(assets, params["relative_band"], params["absolute_band"])
 
-# --- Render UI ---
+# --- Dashboard KPIs ---
 render_dashboard(assets, zones)
 
+# --- Capital allocation ---
+to_reserve, to_invest = render_capital_allocation(params["cash_injection"], reserve_deficit)
+
+# --- Rebalancing ---
+orders, residual_cash = compute_rebalancing(assets, to_invest, zones)
+
 # --- Tabs ---
-tab_capital, tab_reserve, tab_actions, tab_frontier, tab_alloc, tab_corr = st.tabs(
-    [
-        "💰 Capital",
-        "🛡️ Reserva",
-        "📋 Ordens",
-        "📈 Fronteira",
-        "📊 Alocação",
-        "🔗 Correlação",
-    ]
+tab_actions, tab_reserve, tab_frontier, tab_alloc, tab_corr = st.tabs(
+    ["📋 Ordens", "🛡️ Reserva", "📈 Fronteira", "📊 Alocação", "🔗 Correlação"]
 )
 
-with tab_capital:
-    to_reserve, to_invest = render_capital_allocation(params["cash_injection"], reserve_deficit)
-    if to_invest > 0:
-        orders, residual_cash = compute_rebalancing(assets, to_invest, zones)
-    else:
-        orders, residual_cash = [], params["cash_injection"]
+with tab_actions:
+    render_action_table(assets, zones, orders, residual_cash)
 
 with tab_reserve:
     render_emergency_reserve(assets, positions, params["monthly_expenses"], params["emergency_months"])
-
-with tab_actions:
-    effective_cash = to_invest if "to_invest" in dir() else params["cash_injection"]
-    if not orders:
-        orders, residual_cash = compute_rebalancing(assets, effective_cash, zones)
-    render_action_table(assets, zones, orders, residual_cash)
 
 with tab_frontier:
     render_efficient_frontier(frontier, optimal, current_portfolio_point)
 
 with tab_alloc:
+    render_class_allocation_pie(assets)
     render_allocation_chart(assets)
     render_deviation_chart(assets, zones)
 

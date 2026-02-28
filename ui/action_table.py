@@ -18,21 +18,24 @@ def render_action_table(
     order_map: dict[str, Order] = {o.ticker: o for o in orders}
 
     rows = []
-    for a in assets:
-        status, _band = zones.get(a.ticker, (ZoneStatus.HOLD, None))
+    for a in sorted(assets, key=lambda x: -x.current_value):
+        status, band = zones.get(a.ticker, (ZoneStatus.HOLD, None))
         order = order_map.get(a.ticker)
+        band_str = f"[{band.lower_bound:.1f}%, {band.upper_bound:.1f}%]" if band else "—"
 
         rows.append(
             {
                 "Ticker": a.ticker,
                 "Classe": a.asset_class.value,
-                "Preço Atual": a.current_price,
-                "Peso Atual (%)": round(a.current_weight, 2),
-                "Alvo (%)": round(a.target_weight, 2),
+                "Preço": a.current_price,
+                "Valor (R$)": round(a.current_value, 2),
+                "Peso Atual": round(a.current_weight, 2),
+                "Alvo": round(a.target_weight, 2),
+                "Banda": band_str,
                 "Status": status.value,
                 "Ação": order.action.value if order else "—",
-                "Qtd Sugerida": order.quantity if order else 0,
-                "Valor Estimado (R$)": round(order.amount, 2) if order else 0.0,
+                "Qtd": order.quantity if order else 0,
+                "Custo (R$)": round(order.amount, 2) if order else 0.0,
             }
         )
 
@@ -43,28 +46,36 @@ def render_action_table(
             return "background-color: #d4edda; color: #155724"
         if val == "SELL":
             return "background-color: #f8d7da; color: #721c24"
-        return "background-color: #e2e3e5; color: #383d41"
+        return "background-color: #f0f0f0; color: #383d41"
 
-    styled = df.style.applymap(_color_status, subset=["Status", "Ação"])
+    styled = df.style.map(_color_status, subset=["Status", "Ação"])
     styled = styled.format(
         {
-            "Preço Atual": "R$ {:.2f}",
-            "Peso Atual (%)": "{:.2f}%",
-            "Alvo (%)": "{:.2f}%",
-            "Valor Estimado (R$)": "R$ {:.2f}",
+            "Preço": "R$ {:.2f}",
+            "Valor (R$)": "R$ {:.2f}",
+            "Peso Atual": "{:.2f}%",
+            "Alvo": "{:.2f}%",
+            "Custo (R$)": "R$ {:.2f}",
         }
     )
 
-    st.dataframe(styled, use_container_width=True, hide_index=True)
+    st.dataframe(styled, use_container_width=True, hide_index=True, height=min(600, 35 * len(rows) + 40))
 
-    st.info(f"💰 Caixa remanescente após alocação: **R$ {residual_cash:,.2f}**")
+    total_buy = sum(o.amount for o in orders if o.action.value == "BUY")
+    total_sell = sum(o.amount for o in orders if o.action.value == "SELL")
 
-    col1, _ = st.columns([1, 3])
+    col1, col2, col3 = st.columns(3)
     with col1:
-        csv_data = df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "📥 Exportar para CSV",
-            data=csv_data,
-            file_name="ordens_rebalanceamento.csv",
-            mime="text/csv",
-        )
+        st.metric("Total Compras", f"R$ {total_buy:,.2f}")
+    with col2:
+        st.metric("Total Vendas", f"R$ {total_sell:,.2f}")
+    with col3:
+        st.metric("Caixa Remanescente", f"R$ {residual_cash:,.2f}")
+
+    csv_data = df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "📥 Exportar Ordens (CSV)",
+        data=csv_data,
+        file_name="ordens_rebalanceamento.csv",
+        mime="text/csv",
+    )

@@ -18,7 +18,7 @@ PORTFOLIO_META_PATH: Path = BASE_DIR / "data" / "portfolio_meta.json"
 DEFAULT_LOOKBACK: str = "2y"
 TRADING_DAYS_PER_YEAR: int = 252
 
-DEFAULT_RISK_FREE_RATE: float = 0.1375  # SELIC
+DEFAULT_RISK_FREE_RATE: float = 0.15  # SELIC (atualizada fev/2026)
 DEFAULT_RELATIVE_BAND: float = 0.20  # 20% of target weight
 DEFAULT_ABSOLUTE_BAND: float = 1.5  # 1.5 percentage points
 DEFAULT_BLEND_FACTOR: float = 0.30  # 30% Markowitz

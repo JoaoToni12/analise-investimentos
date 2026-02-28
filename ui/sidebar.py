@@ -6,6 +6,7 @@ from config import (
     DEFAULT_ABSOLUTE_BAND,
     DEFAULT_BLEND_FACTOR,
     DEFAULT_EMERGENCY_MONTHS,
+    DEFAULT_MAX_ORDERS,
     DEFAULT_MONTHLY_EXPENSES,
     DEFAULT_RELATIVE_BAND,
     DEFAULT_RISK_FREE_RATE,
@@ -19,6 +20,14 @@ def render_sidebar() -> dict:
     st.sidebar.subheader("💰 APORTE")
     cash_injection = st.sidebar.number_input(
         "Valor mensal (R$)", min_value=0.0, value=1000.0, step=100.0, format="%.2f"
+    )
+    max_orders = st.sidebar.number_input(
+        "Máx. ativos por mês",
+        min_value=1,
+        max_value=27,
+        value=DEFAULT_MAX_ORDERS,
+        step=1,
+        help="Concentra o aporte nos N ativos mais prioritários",
     )
 
     st.sidebar.subheader("🛡️ RESERVA")
@@ -72,6 +81,7 @@ def render_sidebar() -> dict:
 
     return {
         "cash_injection": cash_injection,
+        "max_orders": max_orders,
         "monthly_expenses": monthly_expenses,
         "emergency_months": emergency_months,
         "risk_free_rate": risk_free_rate,

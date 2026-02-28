@@ -23,6 +23,7 @@ DEFAULT_RELATIVE_BAND: float = 0.20  # 20% of target weight
 DEFAULT_ABSOLUTE_BAND: float = 1.5  # 1.5 percentage points
 DEFAULT_BLEND_FACTOR: float = 0.30  # 30% Markowitz
 
+DEFAULT_MAX_ORDERS: int = 5
 DEFAULT_MONTHLY_EXPENSES: float = 3000.0
 DEFAULT_EMERGENCY_MONTHS: int = 6
 

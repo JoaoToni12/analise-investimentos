@@ -178,7 +178,7 @@ if prices_df is not None and not prices_df.empty and len(prices_df.columns) >= 2
 
 # --- Capital allocation + Rebalancing (compute before rendering) ---
 to_reserve, to_invest = render_capital_allocation(params["cash_injection"], reserve_deficit)
-orders, residual_cash = compute_rebalancing(assets, to_invest, zones)
+orders, residual_cash = compute_rebalancing(assets, to_invest, zones, max_orders=params["max_orders"])
 
 # --- Dashboard (uses real orders for signal strip) ---
 render_dashboard(assets, zones, portfolio_meta, orders)

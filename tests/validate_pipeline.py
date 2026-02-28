@@ -45,9 +45,11 @@ for t, (s, b) in zones.items():
 for s, tickers in statuses.items():
     print(f"{s}: {len(tickers)} ativos -> {tickers[:5]}")
 
-orders, residual = compute_rebalancing(assets, 1000, zones)
-print(f"\nOrders: {len(orders)}, Residual: R$ {residual:.2f}")
-for o in orders[:8]:
+orders, residual = compute_rebalancing(assets, 1000, zones, max_orders=5)
+print(f"\nOrders (max 5): {len(orders)}, Residual: R$ {residual:.2f}")
+for o in orders:
     print(f"  {o.action.value} {o.quantity}x {o.ticker} @ R${o.price:.2f} = R${o.amount:.2f}")
+total_spent = sum(o.amount for o in orders)
+print(f"Total alocado: R$ {total_spent:.2f} ({total_spent / 1000 * 100:.0f}% do aporte)")
 
 print("\nPipeline OK!")

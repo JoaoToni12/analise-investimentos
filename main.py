@@ -21,7 +21,7 @@ from engine.rebalancer import compute_rebalancing
 from ingestion.brapi_client import get_batch_quotes
 from ingestion.portfolio_loader import load_portfolio, load_portfolio_meta
 from ingestion.tesouro_client import get_tesouro_prices
-from ingestion.yfinance_client import get_yfinance_quotes
+from ingestion.yfinance_client import STABLECOINS, get_yfinance_quotes
 from ui.action_table import render_action_table
 from ui.charts import (
     render_allocation_chart,
@@ -32,7 +32,7 @@ from ui.charts import (
 )
 from ui.dashboard import render_dashboard
 from ui.portfolio_manager import render_portfolio_manager
-from ui.reserves import compute_reserve_value, render_capital_allocation, render_emergency_reserve
+from ui.reserves import get_reserve_value, render_capital_allocation, render_emergency_reserve
 from ui.sidebar import render_sidebar
 
 logging.basicConfig(level=logging.INFO)
@@ -142,14 +142,16 @@ for p in positions:
 assets = enrich_weights(assets)
 zones = classify_all(assets, params["relative_band"], params["absolute_band"])
 
-# --- Emergency Reserve ---
+# --- Emergency Reserve (external, not from portfolio) ---
 target_reserve = params["monthly_expenses"] * params["emergency_months"]
-current_reserve = compute_reserve_value(assets, positions)
+current_reserve = get_reserve_value(portfolio_meta)
 reserve_deficit = max(target_reserve - current_reserve, 0)
 
-# --- Markowitz (ações + FIIs + crypto with history) ---
+# --- Markowitz (ações + FIIs + non-stablecoin crypto) ---
 MARKOWITZ_CLASSES = {"ACAO", "FII", "ETF", "BDR", "CRYPTO"}
-markowitz_pairs = [(t, c) for t, c in zip(all_tickers, asset_classes) if c in MARKOWITZ_CLASSES]
+markowitz_pairs = [
+    (t, c) for t, c in zip(all_tickers, asset_classes) if c in MARKOWITZ_CLASSES and t not in STABLECOINS
+]
 markowitz_tickers = [t for t, _ in markowitz_pairs]
 markowitz_classes = [c for _, c in markowitz_pairs]
 
@@ -182,7 +184,11 @@ if prices_df is not None and not prices_df.empty and len(prices_df.columns) >= 2
 
         if optimal is not None:
             current_w = compute_weights(assets)
-            optimal_w = {t: float(w) * 100 for t, w in zip(prices_df.columns, optimal["weights"])}
+            # Scale Markowitz weights: they sum to 100% of the subset,
+            # but must be scaled to the subset's share of total portfolio
+            subset_share = sum(current_w.get(t, 0) for t in prices_df.columns)
+            scale = subset_share / 100.0 if subset_share > 0 else 1.0
+            optimal_w = {t: float(w) * 100 * scale for t, w in zip(prices_df.columns, optimal["weights"])}
             suggested = suggest_targets(current_w, optimal_w, params["blend_factor"])
             for a in assets:
                 if a.ticker in suggested:
@@ -207,7 +213,7 @@ with tab_actions:
     render_action_table(assets, zones, orders, residual_cash)
 
 with tab_reserve:
-    render_emergency_reserve(assets, positions, params["monthly_expenses"], params["emergency_months"])
+    render_emergency_reserve(portfolio_meta, params["monthly_expenses"], params["emergency_months"])
 
 with tab_frontier:
     render_efficient_frontier(frontier, optimal, current_portfolio_point)

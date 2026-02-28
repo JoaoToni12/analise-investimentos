@@ -1,28 +1,31 @@
 from __future__ import annotations
 
+from typing import Any
+
 import plotly.graph_objects as go
 import streamlit as st
 
-from engine.models import Asset
 
-
-def compute_reserve_value(assets: list[Asset], positions: list[dict]) -> float:
-    """Sum the current value of assets marked as emergency reserve."""
-    reserve_tickers = {p["ticker"] for p in positions if p.get("is_reserve", False)}
-    return sum(a.current_value for a in assets if a.ticker in reserve_tickers)
+def get_reserve_value(meta: dict[str, Any]) -> float:
+    """Get the current emergency reserve value from portfolio metadata."""
+    reserve_data = meta.get("reserva_emergencia", {})
+    return float(reserve_data.get("saldo", 0))
 
 
 def render_emergency_reserve(
-    assets: list[Asset],
-    positions: list[dict],
+    meta: dict[str, Any],
     monthly_expenses: float,
     emergency_months: int,
 ) -> None:
     """Render the emergency reserve tracking tab."""
     st.subheader("🛡️ Reserva de Emergência")
 
+    reserve_data = meta.get("reserva_emergencia", {})
+    current_reserve = float(reserve_data.get("saldo", 0))
+    local = reserve_data.get("local", "—")
+    rendimento = reserve_data.get("rendimento", "—")
+
     target_reserve = monthly_expenses * emergency_months
-    current_reserve = compute_reserve_value(assets, positions)
     deficit = target_reserve - current_reserve
     coverage_months = current_reserve / monthly_expenses if monthly_expenses > 0 else 0
     pct_complete = (current_reserve / target_reserve * 100) if target_reserve > 0 else 0
@@ -31,13 +34,9 @@ def render_emergency_reserve(
     with col1:
         st.metric("Meta da Reserva", f"R$ {target_reserve:,.2f}")
     with col2:
-        st.metric(
-            "Reserva Atual",
-            f"R$ {current_reserve:,.2f}",
-            delta=f"{pct_complete:.0f}% da meta",
-        )
+        st.metric("Reserva Atual", f"R$ {current_reserve:,.2f}", delta=f"{pct_complete:.0f}% da meta")
     with col3:
-        st.metric("Cobertura Atual", f"{coverage_months:.1f} meses")
+        st.metric("Cobertura", f"{coverage_months:.1f} meses")
     with col4:
         if deficit > 0:
             st.metric("Déficit", f"R$ {deficit:,.2f}", delta="Abaixo da meta", delta_color="inverse")
@@ -57,12 +56,12 @@ def render_emergency_reserve(
                 number={"prefix": "R$ ", "valueformat": ",.0f"},
                 title={"text": "Reserva de Emergência"},
                 gauge={
-                    "axis": {"range": [0, target_reserve * 1.3], "tickformat": ",.0f"},
+                    "axis": {"range": [0, max(target_reserve, current_reserve) * 1.2], "tickformat": ",.0f"},
                     "bar": {"color": "#2ca02c" if pct_complete >= 100 else "#ff7f0e"},
                     "steps": [
                         {"range": [0, target_reserve * 0.5], "color": "#f8d7da"},
                         {"range": [target_reserve * 0.5, target_reserve], "color": "#fff3cd"},
-                        {"range": [target_reserve, target_reserve * 1.3], "color": "#d4edda"},
+                        {"range": [target_reserve, max(target_reserve, current_reserve) * 1.2], "color": "#d4edda"},
                     ],
                     "threshold": {
                         "line": {"color": "#d62728", "width": 3},
@@ -76,31 +75,29 @@ def render_emergency_reserve(
         st.plotly_chart(fig, use_container_width=True)
 
     with col_detail:
-        st.markdown("**Composição da Reserva**")
-        reserve_tickers = {p["ticker"] for p in positions if p.get("is_reserve", False)}
-        reserve_assets = [a for a in assets if a.ticker in reserve_tickers]
+        st.markdown("##### Onde está sua reserva")
+        st.write(f"**Local:** {local}")
+        st.write(f"**Rendimento:** {rendimento}")
+        st.write(f"**Saldo:** R$ {current_reserve:,.2f}")
 
-        if reserve_assets:
-            for a in sorted(reserve_assets, key=lambda x: -x.current_value):
-                pct_of_reserve = (a.current_value / current_reserve * 100) if current_reserve > 0 else 0
-                st.write(f"**{a.ticker}** — R$ {a.current_value:,.2f} ({pct_of_reserve:.1f}% da reserva)")
-        else:
-            st.info("Nenhum ativo marcado como reserva. Edite o portfólio e marque `is_reserve: true`.")
+        st.divider()
+        st.markdown("##### Por que separada?")
+        st.caption(
+            "A reserva de emergência deve ter **liquidez imediata** e **baixo risco**. "
+            "Por isso fica fora dos investimentos de longo prazo (ações, FIIs, RF com carência). "
+            "Contas remuneradas (PicPay, Nubank, etc.) ou Tesouro SELIC com resgate D+0 são ideais."
+        )
 
         if deficit > 0 and monthly_expenses > 0:
-            st.divider()
             months_to_fill = deficit / monthly_expenses
-            st.write(f"Ao ritmo de 1 despesa mensal por mês, faltam **{months_to_fill:.1f} meses** para completar.")
+            st.info(f"Faltam **{months_to_fill:.1f} meses** de despesa para completar a meta.")
 
 
 def render_capital_allocation(
     cash_injection: float,
     reserve_deficit: float,
 ) -> tuple[float, float]:
-    """Render capital allocation split between reserve and investments.
-
-    Returns (amount_to_reserve, amount_to_invest).
-    """
+    """Render capital allocation split between reserve and investments."""
     st.subheader("💰 Alocação do Capital")
 
     if reserve_deficit <= 0:

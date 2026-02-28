@@ -2,5 +2,11 @@
   "valor_investido": 62951.92,
   "dividendos_recebidos": 1351.60,
   "ganho_capital": 7066.19,
-  "ultima_atualizacao": "2026-02-28"
+  "ultima_atualizacao": "2026-02-28",
+  "reserva_emergencia": {
+    "saldo": 18618.15,
+    "local": "PicPay",
+    "rendimento": "102% CDI",
+    "ultima_atualizacao": "2026-02-28"
+  }
 }

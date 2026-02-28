@@ -36,7 +36,7 @@ def test_import_reserves():
     mod = importlib.import_module("ui.reserves")
     assert hasattr(mod, "render_emergency_reserve")
     assert hasattr(mod, "render_capital_allocation")
-    assert hasattr(mod, "compute_reserve_value")
+    assert hasattr(mod, "get_reserve_value")
 
 
 def test_import_tesouro_client():

@@ -16,9 +16,11 @@ ASSET_CLASSES_B3 = {"ACAO", "FII", "ETF", "BDR"}
 ASSET_CLASSES_CRYPTO = {"CRYPTO"}
 
 SPECIAL_YF_TICKERS: dict[str, str] = {
-    "USDT": "USDT-BRL",
+    "USDT": "BRL=X",  # 1 USDT ≈ 1 USD, so USD/BRL rate is the price
     "ALAB": "ALAB",
 }
+
+STABLECOINS = {"USDT", "USDC", "BUSD", "DAI"}
 
 
 def to_yfinance_ticker(ticker: str, asset_class: str = "ACAO") -> str:
